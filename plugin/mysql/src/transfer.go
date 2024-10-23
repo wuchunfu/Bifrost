@@ -149,15 +149,15 @@ func (This *Conn) TransferToTypeByColumnType_Starrocks(columnType string, nullab
 		toType = "VARCHAR(20)"
 	case "int64":
 		toType = "BIGINT(20)"
-	case "uint32", "uint24":
+	case "uint32":
 		toType = "BIGINT(20)"
-	case "int32", "int24":
+	case "int32", "int24", "uint24":
 		toType = "INT(11)"
 	case "uint16":
 		toType = "INT(11)"
 	case "int16", "year(4)", "year(2)", "year":
 		toType = "SMALLINT(6)"
-	case "uint8", "SMALLINT(uint8)":
+	case "uint8":
 		toType = "SMALLINT(6)"
 	case "int8", "bool":
 		toType = "TINYINT(4)"
@@ -174,7 +174,7 @@ func (This *Conn) TransferToTypeByColumnType_Starrocks(columnType string, nullab
 	case "time":
 		toType = "VARCHAR(10)"
 	case "enum":
-		toType = "VARCHAR(255)"
+		toType = "VARCHAR(765)"
 	case "set":
 		toType = "VARCHAR(2048)"
 	case "string", "longblob", "longtext":
@@ -209,30 +209,40 @@ func (This *Conn) TransferToTypeByColumnType_Starrocks(columnType string, nullab
 			break
 		}
 		if strings.Index(toLowerColumnType, "enum(") >= 0 {
-			toType = "VARCHAR(255)"
+			toType = "VARCHAR(765)"
 			break
 		}
 		if strings.Index(toLowerColumnType, "set(") >= 0 {
 			toType = "VARCHAR(2048)"
 			break
 		}
+		if strings.Index(toLowerColumnType, "varchar") >= 0 {
+			toType = This.TransferDataType(toLowerColumnType, "varchar", "VARCHAR", 255)
+			break
+		}
 		if strings.Index(toLowerColumnType, "char") >= 0 {
 			i := strings.Index(toLowerColumnType, "char(")
 			if i < 0 {
-				toType = "VARCHAR(255)"
+				toType = "VARCHAR(765)"
 				break
 			}
 			lenStr := strings.Split(toLowerColumnType[i+5:], ")")[0]
 			lenStr = strings.Trim(lenStr, " ")
 			if lenStr == "" {
-				toType = "VARCHAR(255)"
+				toType = "VARCHAR(765)"
 			} else {
-				toType = fmt.Sprintf("CHAR(%s)", lenStr)
+				if i == 0 {
+					toType = fmt.Sprintf("CHAR(%s)", lenStr)
+				} else {
+					lenN, _ := strconv.Atoi(lenStr)
+					if lenN > 0 {
+						lenN = lenN * 3
+					} else {
+						lenN = 765
+					}
+					toType = fmt.Sprintf("VARCHAR(%d)", lenN)
+				}
 			}
-			break
-		}
-		if strings.Index(toLowerColumnType, "varchar") >= 0 {
-			toType = This.TransferDataType(toLowerColumnType, "varchar", "VARCHAR", 255)
 			break
 		}
 		if strings.Index(toLowerColumnType, "decimal") >= 0 {
@@ -281,6 +291,9 @@ func (This *Conn) TransferDataType(columnType, dataType, destDataType string, de
 	}
 	if dataTypeLen == 0 {
 		return destDataType
+	}
+	if destDataType == "VARCHAR" {
+		dataTypeLen = dataTypeLen * 3
 	}
 	return fmt.Sprintf("%s(%d)", destDataType, dataTypeLen)
 }
